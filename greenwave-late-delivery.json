@@ -1,0 +1,466 @@
+{
+  "name": "GreenWave Late Delivery Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        300
+      ],
+      "id": "ab0a9a7c-4d1c-4e41-973f-c451fa0dff6d",
+      "name": "Delay report received"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fd724ae7-26f7-4c44-b2fb-f562f60b670e",
+              "name": "shipmentId",
+              "value": "={{ ($json.chatInput.match(/GW-\\d+/i)?.[0] || '').toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "23a31530-693e-4378-bc23-140364afc917",
+              "name": "delayMinutes",
+              "value": "={{ (() => {\n  const text = String($json.chatInput || '').toLowerCase();\n  const h = text.match(/(\\d+(?:\\.\\d+)?)\\s*(hours?|hrs?|h)\\b/);\n  const m = text.match(/(\\d+)\\s*(minutes?|mins?|min|m)\\b/);\n  const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);\n  return Math.round(total);\n})() }}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "id": "c7ddada3-9d31-480d-8b54-bac84d922e35",
+      "name": "Parse report"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "724149af-812f-49c8-ad83-84771b80dcf5",
+              "leftValue": "={{ $json.shipmentId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f34f69b5-ad8b-4f68-91bf-72da53c4214c",
+              "leftValue": "={{ Number($json.delayMinutes) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        300
+      ],
+      "id": "66524042-b821-4191-867d-66d01134f9c3",
+      "name": "Valid report?"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a short internal incident summary (1 sentence).\n\nShipment: {{ $json.shipmentId }}\nDelay minutes: {{ $json.delayMinutes }}\nMessage: {{ $('Delay report received').item.json.chatInput }}\n\nRules:\n- No advice, no bullet points.\n- Include the shipment ID and the delay in minutes.\nReturn only the sentence.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        680,
+        200
+      ],
+      "id": "a658defa-8c8d-4f1a-9165-94cc82504220",
+      "name": "Write incident summary"
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-3.5-haiku",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        680,
+        420
+      ],
+      "id": "2b8f1296-d38f-4521-a1b6-641f65e74e81",
+      "name": "OpenRouter Chat Model"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fac577c7-6953-454a-aebc-d1afa34322ad",
+              "name": "shipmentId",
+              "value": "={{ $('Parse report').item.json.shipmentId }}",
+              "type": "string"
+            },
+            {
+              "id": "dedb068b-801d-4ff7-9863-c0fa9d3ab577",
+              "name": "delayMinutes",
+              "value": "={{ Number($('Parse report').item.json.delayMinutes) }}",
+              "type": "number"
+            },
+            {
+              "id": "2e2efdff-b518-41e7-9685-058372d2f454",
+              "name": "priorityLevel",
+              "value": "={{ (() => { const d = Number($('Parse report').item.json.delayMinutes || 0); return d >= 60 ? 'Critical' : (d > 30 ? 'High' : 'Low'); })() }}",
+              "type": "string"
+            },
+            {
+              "id": "19437714-d439-47dd-b27f-d71818e26d75",
+              "name": "incidentSummary",
+              "value": "={{ ($json.output || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "08a0e8f0-487a-4594-9e61-44f545fb7415",
+              "name": "status",
+              "value": "={{ Number($('Parse report').item.json.delayMinutes) > 30 ? 'Escalated (email sent)' : 'Logged (no escalation)' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        920,
+        200
+      ],
+      "id": "dfb4b272-7b3e-4e8d-becb-68e0592ab3cd",
+      "name": "Prepare log fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "099875f0-a77c-484f-bb58-74f05e30aaed",
+              "name": "priorityLevel",
+              "value": "Unknown",
+              "type": "string"
+            },
+            {
+              "id": "8cf18caf-05e0-4fd9-808e-52de999fecd7",
+              "name": "incidentSummary",
+              "value": "=Could not read a shipment ID (GW-1234) and delay from: \"{{ $('Delay report received').item.json.chatInput }}\"",
+              "type": "string"
+            },
+            {
+              "id": "73bd9713-9df4-4d3d-a892-eac98ccc9e63",
+              "name": "status",
+              "value": "Needs review",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        920,
+        460
+      ],
+      "id": "ae5b60e6-a21f-4657-b602-b2c8ddf74cb1",
+      "name": "Flag for review"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "Shipment ID": "={{ $json.shipmentId }}",
+            "Delay (min)": "={{ $json.delayMinutes }}",
+            "Priority": "={{ $json.priorityLevel }}",
+            "Incident summary": "={{ $json.incidentSummary }}",
+            "Status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Shipment ID",
+              "displayName": "Shipment ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Delay (min)",
+              "displayName": "Delay (min)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Incident summary",
+              "displayName": "Incident summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1160,
+        300
+      ],
+      "id": "f0aa1163-aabf-4890-bd3b-e05bb89b5149",
+      "name": "Log to Google Sheets"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "21ff6d8e-15ac-48a7-9a9f-7320320b3e2f",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Escalated (email sent)",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1380,
+        300
+      ],
+      "id": "3bd8d823-c6e8-4ff3-aa19-22cb635bb200",
+      "name": "Escalate? (> 30 min)"
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts@example.com",
+        "toEmail": "ops@example.com",
+        "subject": "=[{{ $json.priorityLevel }}] Late delivery {{ $json.shipmentId }}: {{ $json.delayMinutes }} min",
+        "html": "=<h3>Late delivery alert · GreenWave Logistics</h3>\n<p><strong>Shipment:</strong> {{ $json.shipmentId }}</p>\n<p><strong>Delay:</strong> {{ $json.delayMinutes }} minutes ({{ $json.priorityLevel }})</p>\n<p><strong>AI incident summary:</strong><br>{{ $json.incidentSummary }}</p>\n<p><strong>Logged:</strong> {{ $now.toISO() }}</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1600,
+        200
+      ],
+      "id": "fe018e06-b1fe-4218-99e0-f9d6b0cb47ae",
+      "name": "Email ops team"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Delay report received": {
+      "main": [
+        [
+          {
+            "node": "Parse report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse report": {
+      "main": [
+        [
+          {
+            "node": "Valid report?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid report?": {
+      "main": [
+        [
+          {
+            "node": "Write incident summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag for review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write incident summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write incident summary": {
+      "main": [
+        [
+          {
+            "node": "Prepare log fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare log fields": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag for review": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Escalate? (> 30 min)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate? (> 30 min)": {
+      "main": [
+        [
+          {
+            "node": "Email ops team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
