@@ -2,7 +2,7 @@
 
 An n8n workflow for a logistics company's operations team. A dispatcher types a delay report in plain language, and the workflow turns it into a structured log entry, writes an AI incident summary and emails the ops team when the delay is serious.
 
-> Add a screenshot of the workflow canvas here: `screenshots/workflow.png`
+![Workflow](workflow.png)
 
 ## How it works
 
